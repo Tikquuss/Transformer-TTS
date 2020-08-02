@@ -1,10 +1,20 @@
 import numpy as np
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
+import torch
+from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler
 import os
 from utils import get_spectrograms
-import hyperparams as hp
+
+from config import sample_rate, data_path
+
 import librosa
+
+import argparse
+
+def get_parser():
+    parser = argparse.ArgumentParser(description="n_samples")
+    parser.add_argument("--n_samples", type=int, default=-1, help="number of samples to consider")
+    return parser
 
 class PrepareDataset(Dataset):
     """LJSpeech dataset."""
@@ -20,7 +30,7 @@ class PrepareDataset(Dataset):
         self.root_dir = root_dir
 
     def load_wav(self, filename):
-        return librosa.load(filename, sr=hp.sample_rate)
+        return librosa.load(filename, sr=sample_rate)
 
     def __len__(self):
         return len(self.landmarks_frame)
@@ -37,9 +47,22 @@ class PrepareDataset(Dataset):
         return sample
     
 if __name__ == '__main__':
-    dataset = PrepareDataset(os.path.join(hp.data_path,'metadata.csv'), os.path.join(hp.data_path,'wavs'))
-    dataloader = DataLoader(dataset, batch_size=1, drop_last=False, num_workers=8)
+    parser = get_parser()
+    params = parser.parse_args()
+
+    dataset = PrepareDataset(os.path.join(data_path,'metadata.csv'), os.path.join(data_path,'wavs'))
+    
+    if params.n_samples < 0 : 
+        dataloader = DataLoader(dataset, batch_size=1, drop_last=False, num_workers=8)
+    else :
+        indices = list(range(len(dataset)))
+        sampler = SubsetRandomSampler(indices[:params.n_samples])
+        dataloader = DataLoader(dataset, batch_size=1, sampler = sampler, drop_last=False, num_workers=8)
+        
     from tqdm import tqdm
     pbar = tqdm(dataloader)
     for d in pbar:
         pass
+        
+    torch.save(params.n_samples, data_path+'/.n_samples')
+    
